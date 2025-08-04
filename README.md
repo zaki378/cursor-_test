@@ -4,7 +4,7 @@
 
 ## 🌐 ライブプレビュー
 
-**GitHub Pages**: https://[your-username].github.io/[repository-name]/
+**GitHub Pages**: https://zaki378.github.io/cursor-_test/
 
 ## ✨ 機能
 
