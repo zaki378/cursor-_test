@@ -212,8 +212,9 @@ async fn stt_transcribe_once(_app: AppHandle, settings: AppSettings, audio_b64: 
         .or_else(|| {
             let path = _app.path().app_config_dir().ok()?.join("secrets.json");
             fs::read(&path).ok().and_then(|b| serde_json::from_slice::<Keys>(&b).ok()).and_then(|k| k.groq_api_key)
-        })
-        .ok_or_else(|| "GROQ_API_KEY not set".to_string())?;
+        });
+    if api_key.is_none() { return Ok("(demo: STT disabled; set GROQ_API_KEY)".into()); }
+    let api_key = api_key.unwrap();
     let client = reqwest::Client::builder().timeout(Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
     let audio_bytes = base64::decode(audio_b64).map_err(|e| e.to_string())?;
     let part = reqwest::multipart::Part::bytes(audio_bytes).file_name("audio.webm").mime_str("audio/webm").map_err(|e| e.to_string())?;
@@ -239,8 +240,9 @@ async fn nlp_gemini_format(_app: AppHandle, settings: AppSettings, text: String)
         .or_else(|| {
             let path = _app.path().app_config_dir().ok()?.join("secrets.json");
             fs::read(&path).ok().and_then(|b| serde_json::from_slice::<Keys>(&b).ok()).and_then(|k| k.gemini_api_key)
-        })
-        .ok_or_else(|| "GEMINI_API_KEY not set".to_string())?;
+        });
+    if key.is_none() { return Ok(text); }
+    let key = key.unwrap();
     let model = "gemini-1.5-flash-latest";
     let system_instructions = build_gemini_instructions(&settings);
     #[derive(Serialize)]
