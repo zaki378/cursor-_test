@@ -28,9 +28,11 @@ jobs:
           cache: 'npm'
 
       - name: Install deps
+        working-directory: app
         run: npm ci
 
       - name: Build
+        working-directory: app
         env:
           GITHUB_PAGES: '1'
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -39,7 +41,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: app/dist
 
   deploy:
     needs: build
