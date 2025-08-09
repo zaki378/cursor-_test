@@ -3,11 +3,13 @@ import react from "@vitejs/plugin-react";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
+const repoBase = process.env.GITHUB_REPOSITORY?.split("/")[1] || "";
+const isPages = !!process.env.GITHUB_PAGES;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
-
+  base: isPages && repoBase ? `/${repoBase}/` : '/',
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors
