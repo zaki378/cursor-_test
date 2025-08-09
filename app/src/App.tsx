@@ -80,23 +80,31 @@ const DEFAULTS: AppSettings = {
   customReplaceRules: [],
 }
 
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label className="toggle">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-      <span>{label}</span>
-    </label>
+    <div className={`switch ${checked ? 'on' : ''}`} onClick={() => onChange(!checked)} role="switch" aria-checked={checked} />
   )
 }
 
-function Section({ title, children, extra }: { title: string; children: any; extra?: any }) {
+function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="toggle">
+      <div className="toggle-label">{label}</div>
+      <Switch checked={checked} onChange={onChange} />
+    </div>
+  )
+}
+
+function Accordion({ icon, title, children, defaultOpen = true }: { icon: string; title: string; children: any; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="card">
-      <div className="card-header">
+      <div className="card-header" onClick={() => setOpen(!open)}>
+        <div className="card-icon">{icon}</div>
         <h3>{title}</h3>
-        <div>{extra}</div>
+        <div className={`chevron ${open ? 'open' : ''}`}>▶</div>
       </div>
-      <div className="card-body">{children}</div>
+      {open && <div className="card-body">{children}</div>}
     </div>
   )
 }
@@ -170,8 +178,10 @@ export default function App() {
 
   return (
     <div className="container">
-      <header className="header">
-        <h2>Push-To-Talk App</h2>
+      <div className="header">
+        <div className="brand">
+          <h2>Push-To-Talk App</h2>
+        </div>
         <div className="preset">
           <label>Preset</label>
           <select value={settings.securityMasterMode} onChange={(e) => update({ securityMasterMode: e.target.value as SecurityMasterMode })}>
@@ -180,9 +190,9 @@ export default function App() {
             <option value="flexible">flexible</option>
           </select>
         </div>
-      </header>
+      </div>
 
-      <div className="ptt">
+      <div className="hero">
         <button
           className={`ptt-btn ${pttState}`}
           onMouseDown={startRecording}
@@ -197,81 +207,86 @@ export default function App() {
         </button>
       </div>
 
-      <Section title="Gemini">
-        <Toggle checked={settings.enableGemini} onChange={(v) => update({ enableGemini: v })} label="Enable Gemini formatting" />
-        {settings.enableGemini && (
+      <div className="sections">
+        <Accordion icon="✨" title="Gemini">
+          <Toggle label="Enable Gemini formatting" checked={settings.enableGemini} onChange={(v) => update({ enableGemini: v })} />
+          {settings.enableGemini && (
+            <div className="grid">
+              <Toggle label="自然な表現に整える" checked={settings.naturalizeExpressions} onChange={(v) => update({ naturalizeExpressions: v })} />
+              <Toggle label="自動句読点" checked={settings.autoPunctuation} onChange={(v) => update({ autoPunctuation: v })} />
+              <Toggle label="外来語の表記統一" checked={settings.unifyForeignWords} onChange={(v) => update({ unifyForeignWords: v })} />
+              <Toggle label="固有名詞を保持" checked={settings.preserveOriginalProperNouns} onChange={(v) => update({ preserveOriginalProperNouns: v })} />
+              <Toggle label="要約・脚色なし" checked={settings.noSummaryOrEmbellishment} onChange={(v) => update({ noSummaryOrEmbellishment: v })} />
+            </div>
+          )}
+        </Accordion>
+
+        <Accordion icon="🗄" title="Data Retention">
           <div className="grid">
-            <Toggle checked={settings.naturalizeExpressions} onChange={(v) => update({ naturalizeExpressions: v })} label="自然な表現に整える" />
-            <Toggle checked={settings.autoPunctuation} onChange={(v) => update({ autoPunctuation: v })} label="自動句読点" />
-            <Toggle checked={settings.unifyForeignWords} onChange={(v) => update({ unifyForeignWords: v })} label="外来語の表記統一" />
-            <Toggle checked={settings.preserveOriginalProperNouns} onChange={(v) => update({ preserveOriginalProperNouns: v })} label="固有名詞を保持" />
-            <Toggle checked={settings.noSummaryOrEmbellishment} onChange={(v) => update({ noSummaryOrEmbellishment: v })} label="要約・脚色なし" />
+            <Toggle label="保存しない" checked={settings.noSave} onChange={(v) => update({ noSave: v })} />
+            <Toggle label="一時ファイル暗号化" checked={settings.encryptTempFiles} onChange={(v) => update({ encryptTempFiles: v })} />
+            <Toggle label="貼り付け後にクリップボード自動クリア" checked={settings.autoClearClipboard} onChange={(v) => update({ autoClearClipboard: v })} />
+            <Toggle label="終了時に全削除" checked={settings.clearAllOnExit} onChange={(v) => update({ clearAllOnExit: v })} />
           </div>
-        )}
-      </Section>
+        </Accordion>
 
-      <Section title="Data Retention">
-        <div className="grid">
-          <Toggle checked={settings.noSave} onChange={(v) => update({ noSave: v })} label="保存しない" />
-          <Toggle checked={settings.encryptTempFiles} onChange={(v) => update({ encryptTempFiles: v })} label="一時ファイル暗号化" />
-          <Toggle checked={settings.autoClearClipboard} onChange={(v) => update({ autoClearClipboard: v })} label="貼り付け後にクリップボード自動クリア" />
-          <Toggle checked={settings.clearAllOnExit} onChange={(v) => update({ clearAllOnExit: v })} label="終了時に全削除" />
-        </div>
-      </Section>
-
-      <Section title="PII Mask">
-        <div className="grid">
-          <div>
-            <label>強度</label>
-            <select value={settings.maskStrength} onChange={(e) => update({ maskStrength: e.target.value as MaskStrength })}>
-              <option value="strict">strict</option>
-              <option value="standard">standard</option>
-              <option value="relaxed">relaxed</option>
-            </select>
+        <Accordion icon="🔒" title="PII Mask">
+          <div className="grid">
+            <div>
+              <label>強度</label>
+              <select value={settings.maskStrength} onChange={(e) => update({ maskStrength: e.target.value as MaskStrength })}>
+                <option value="strict">strict</option>
+                <option value="standard">standard</option>
+                <option value="relaxed">relaxed</option>
+              </select>
+            </div>
+            <Toggle label="電話番号" checked={settings.maskPhone} onChange={(v) => update({ maskPhone: v })} />
+            <Toggle label="メール" checked={settings.maskEmail} onChange={(v) => update({ maskEmail: v })} />
+            <Toggle label="住所" checked={settings.maskAddress} onChange={(v) => update({ maskAddress: v })} />
+            <Toggle label="数列" checked={settings.maskNumbers} onChange={(v) => update({ maskNumbers: v })} />
+            <Toggle label="氏名" checked={settings.maskNames} onChange={(v) => update({ maskNames: v })} />
           </div>
-          <Toggle checked={settings.maskPhone} onChange={(v) => update({ maskPhone: v })} label="電話番号" />
-          <Toggle checked={settings.maskEmail} onChange={(v) => update({ maskEmail: v })} label="メール" />
-          <Toggle checked={settings.maskAddress} onChange={(v) => update({ maskAddress: v })} label="住所" />
-          <Toggle checked={settings.maskNumbers} onChange={(v) => update({ maskNumbers: v })} label="数列" />
-          <Toggle checked={settings.maskNames} onChange={(v) => update({ maskNames: v })} label="氏名" />
-        </div>
-      </Section>
+        </Accordion>
 
-      <Section title="API Security">
-        <div className="grid">
-          <div>Text-only to Gemini（固定）</div>
-          <Toggle checked={settings.disableDataTraining} onChange={(v) => update({ disableDataTraining: v })} label="学習に利用しない" />
-          <div>
-            <label>リージョン</label>
-            <select value={settings.regionPreference} onChange={(e) => update({ regionPreference: e.target.value as RegionPreference })}>
-              <option value="nearest">nearest</option>
-              <option value="jp">jp</option>
-            </select>
+        <Accordion icon="🛰" title="API Security">
+          <div className="grid">
+            <div>
+              <label>Text-only to Gemini（固定）</label>
+              <div className="toggle"><div className="toggle-label">常にテキストのみ送信</div><div className="switch on" /></div>
+            </div>
+            <Toggle label="学習に利用しない" checked={settings.disableDataTraining} onChange={(v) => update({ disableDataTraining: v })} />
+            <div>
+              <label>リージョン</label>
+              <select value={settings.regionPreference} onChange={(e) => update({ regionPreference: e.target.value as RegionPreference })}>
+                <option value="nearest">nearest</option>
+                <option value="jp">jp</option>
+              </select>
+            </div>
+            <Toggle label="自前キーを使う" checked={settings.useBYOKey} onChange={(v) => update({ useBYOKey: v })} />
           </div>
-          <Toggle checked={settings.useBYOKey} onChange={(v) => update({ useBYOKey: v })} label="自前キーを使う" />
-        </div>
-      </Section>
+        </Accordion>
 
-      <Section title="Runtime Guards">
-        <div className="grid">
-          <Toggle checked={settings.enableDLPScan} onChange={(v) => update({ enableDLPScan: v })} label="DLPスキャン" />
-          <div>
-            <label>アクション</label>
-            <select value={settings.dlpAction} onChange={(e) => update({ dlpAction: e.target.value as DlpAction })}>
-              <option value="mask">mask</option>
-              <option value="warn">warn</option>
-              <option value="block">block</option>
-            </select>
+        <Accordion icon="🛡" title="Runtime Guards">
+          <div className="grid">
+            <Toggle label="DLPスキャン" checked={settings.enableDLPScan} onChange={(v) => update({ enableDLPScan: v })} />
+            <div>
+              <label>アクション</label>
+              <select value={settings.dlpAction} onChange={(e) => update({ dlpAction: e.target.value as DlpAction })}>
+                <option value="mask">mask</option>
+                <option value="warn">warn</option>
+                <option value="block">block</option>
+              </select>
+            </div>
+            <Toggle label="オフラインモード" checked={settings.offlineMode} onChange={(v) => update({ offlineMode: v })} />
           </div>
-          <Toggle checked={settings.offlineMode} onChange={(v) => update({ offlineMode: v })} label="オフラインモード" />
-        </div>
-      </Section>
+        </Accordion>
 
-      <Section title="API Keys">
-        <KeysPanel />
-      </Section>
+        <Accordion icon="🔑" title="API Keys">
+          <KeysPanel />
+        </Accordion>
+      </div>
 
-      <footer className="footer">v0.1.0</footer>
+      <div className="footer">v0.1.0</div>
     </div>
   )
 }
@@ -300,7 +315,7 @@ function KeysPanel() {
         <input type="password" value={gemini} onChange={(e) => setGemini(e.target.value)} placeholder="AIza..." />
       </div>
       <div style={{ display: 'flex', alignItems: 'end' }}>
-        <button onClick={save}>Save</button>
+        <button className="ptt-btn" onClick={save}>Save</button>
       </div>
     </div>
   )
