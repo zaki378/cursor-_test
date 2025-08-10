@@ -205,6 +205,9 @@ export default function App() {
           {pttState === 'recording' && 'Recording...'}
           {pttState === 'processing' && 'Processing...'}
         </button>
+        {pttState === 'recording' && (
+          <button className="stop-btn" onClick={stopRecording} aria-label="Stop recording">Stop</button>
+        )}
       </div>
 
       <div className="sections">

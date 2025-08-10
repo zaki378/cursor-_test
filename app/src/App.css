@@ -28,12 +28,14 @@ body { margin: 0; background: radial-gradient(1200px 600px at 50% -10%, #263141 
 .preset select { background: transparent; border: 1px solid var(--border); color: var(--text); padding: 6px 10px; border-radius: 8px; outline: none; }
 
 /* Hero PTT button */
-.hero { display: flex; justify-content: center; margin: 12px 0 18px; position: sticky; top: 8px; z-index: 5; }
+.hero { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 12px 0 18px; position: sticky; top: 8px; z-index: 5; }
 .ptt-btn { position: relative; padding: 18px 28px; border-radius: 999px; border: 1px solid var(--ring); background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 60%); color: white; font-weight: 800; letter-spacing: 0.3px; cursor: pointer; box-shadow: 0 10px 24px #3b82f655, inset 0 -2px 0 #00000022; transition: transform .08s ease, box-shadow .2s ease, opacity .2s ease; }
 .ptt-btn:hover { box-shadow: 0 14px 30px #3b82f677, inset 0 -2px 0 #00000022; }
 .ptt-btn:active { transform: translateY(1px) scale(0.99); }
 .ptt-btn.recording { background: linear-gradient(135deg, #f87171 0%, #ef4444 60%); box-shadow: 0 10px 24px #ef444455; }
 .ptt-btn.processing { background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 60%); box-shadow: 0 10px 24px #f59e0b55; }
+.stop-btn { padding: 14px 18px; border-radius: 12px; border: 1px solid var(--ring); background: linear-gradient(135deg, #ef4444, #dc2626); color: white; font-weight: 800; cursor: pointer; box-shadow: 0 10px 24px #ef444455; }
+.stop-btn:hover { filter: brightness(1.05); }
 
 /* Grid layout for cards */
 .sections { display: grid; grid-template-columns: 1fr; gap: 14px; }
