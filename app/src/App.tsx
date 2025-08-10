@@ -116,6 +116,8 @@ export default function App() {
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
+  const [interimText, setInterimText] = useState('')
+  const [finalText, setFinalText] = useState('')
 
   useEffect(() => {
     invoke<AppSettings>('settings_get').then((s) => {
@@ -141,27 +143,31 @@ export default function App() {
 
   const startRecording = async () => {
     if (pttState !== 'idle') return
+    setFinalText('')
+    setInterimText('')
     setPttState('recording')
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     mediaStreamRef.current = stream
     const mr = new MediaRecorder(stream)
     mediaRecorderRef.current = mr
     audioChunksRef.current = []
-    mr.ondataavailable = (e) => {
-      if (e.data.size > 0) audioChunksRef.current.push(e.data)
-    }
+    // simple fake interim update to show realtime UX; in production, wire STT streaming
+    const interimTimer = setInterval(() => {
+      setInterimText((t) => (t ? t + ' …' : '…'))
+    }, 500)
+    mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
     mr.onstop = async () => {
+      clearInterval(interimTimer)
       setPttState('processing')
       const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
       const b64 = await blobToBase64(blob)
-      // const masked = await invoke<string>('mask_text', { settings: toSnakeCase(settings), input: '' }) // reserved for pre-mask before STT (not used)
       const stt = await invoke<string>('stt_transcribe_once', { settings, audioB64: b64 })
+      setInterimText('')
+      setFinalText(stt)
       const formatted = await invoke<string>('nlp_gemini_format', { settings, text: stt })
       await invoke('clipboard_set', { text: formatted })
       await invoke('input_paste')
-      if (settings.autoClearClipboard) {
-        await invoke('clipboard_clear').catch(() => {})
-      }
+      if (settings.autoClearClipboard) { await invoke('clipboard_clear').catch(() => {}) }
       setPttState('idle')
     }
     mr.start()
@@ -211,6 +217,19 @@ export default function App() {
       </div>
 
       <div className="sections">
+        <Accordion icon="📝" title="Transcript" defaultOpen>
+          <div className="transcript">
+            <div className="badge">Live</div>
+            <textarea className="textarea" placeholder="Interim (live)" value={interimText} readOnly />
+            <textarea className="textarea" placeholder="Final" value={finalText} onChange={(e) => setFinalText(e.target.value)} />
+            <div className="actions">
+              <button className="btn ghost" onClick={() => { setInterimText(''); setFinalText('') }}>Clear</button>
+              <button className="btn" onClick={async () => { await invoke('clipboard_set', { text: finalText || interimText }); }}>Copy</button>
+              <button className="btn primary" onClick={async () => { await invoke('clipboard_set', { text: finalText || interimText }); await invoke('input_paste') }}>Paste</button>
+            </div>
+          </div>
+        </Accordion>
+
         <Accordion icon="✨" title="Gemini">
           <Toggle label="Enable Gemini formatting" checked={settings.enableGemini} onChange={(v) => update({ enableGemini: v })} />
           {settings.enableGemini && (
