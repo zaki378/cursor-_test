@@ -295,27 +295,33 @@ export default function App() {
 }
 
 function KeysPanel() {
+  const [hasGroq, setHasGroq] = useState(false)
+  const [hasGemini, setHasGemini] = useState(false)
   const [groq, setGroq] = useState('')
   const [gemini, setGemini] = useState('')
   useEffect(() => {
-    invoke<{ groqApiKey?: string; geminiApiKey?: string }>('keys_get').then((k) => {
-      setGroq(k.groqApiKey || '')
-      setGemini(k.geminiApiKey || '')
+    invoke<{ hasGroq: boolean; hasGemini: boolean }>('keys_get').then((k) => {
+      setHasGroq(!!k.hasGroq)
+      setHasGemini(!!k.hasGemini)
     }).catch(() => {})
   }, [])
   const save = async () => {
-    await invoke('keys_set', { keys: { groqApiKey: groq || null, geminiApiKey: gemini || null } })
-    alert('Saved keys locally')
+    await invoke('keys_set', { keys: { groqApiKey: groq || undefined, geminiApiKey: gemini || undefined } })
+    setHasGroq(!!groq || hasGroq)
+    setHasGemini(!!gemini || hasGemini)
+    setGroq('')
+    setGemini('')
+    alert('Saved (stored values are hidden for security)')
   }
   return (
     <div className="grid">
       <div>
-        <label>GROQ API Key</label>
-        <input type="password" value={groq} onChange={(e) => setGroq(e.target.value)} placeholder="sk_..." />
+        <label>GROQ API Key {hasGroq ? '• set' : '(not set)'}</label>
+        <input type="password" value={groq} onChange={(e) => setGroq(e.target.value)} placeholder="sk_... (leave blank to keep)" />
       </div>
       <div>
-        <label>Gemini API Key</label>
-        <input type="password" value={gemini} onChange={(e) => setGemini(e.target.value)} placeholder="AIza..." />
+        <label>Gemini API Key {hasGemini ? '• set' : '(not set)'}</label>
+        <input type="password" value={gemini} onChange={(e) => setGemini(e.target.value)} placeholder="AIza... (leave blank to keep)" />
       </div>
       <div style={{ display: 'flex', alignItems: 'end' }}>
         <button className="ptt-btn" onClick={save}>Save</button>

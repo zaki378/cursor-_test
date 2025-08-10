@@ -92,6 +92,9 @@ impl Default for AppSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Keys { pub groq_api_key: Option<String>, pub gemini_api_key: Option<String> }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct KeysPresence { pub has_groq: bool, pub has_gemini: bool }
+
 #[derive(Default)]
 struct AppState {
     settings: Mutex<AppSettings>,
@@ -114,19 +117,30 @@ fn secrets_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("secrets.json"))
 }
 
+fn read_keys_from_file(app: &AppHandle) -> Result<Keys, String> {
+    let path = secrets_path(app)?;
+    Ok(fs::read(&path).ok().and_then(|b| serde_json::from_slice::<Keys>(&b).ok()).unwrap_or_default())
+}
+
+fn write_keys_to_file(app: &AppHandle, keys: &Keys) -> Result<(), String> {
+    let path = secrets_path(app)?;
+    if let Some(parent) = path.parent() { fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+    let data = serde_json::to_vec_pretty(&keys).map_err(|e| e.to_string())?;
+    fs::write(&path, data).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
-fn keys_get(app: AppHandle) -> Result<Keys, String> {
-    let path = secrets_path(&app)?;
-    let keys = fs::read(&path).ok().and_then(|b| serde_json::from_slice::<Keys>(&b).ok()).unwrap_or_default();
-    Ok(keys)
+fn keys_get(app: AppHandle) -> Result<KeysPresence, String> {
+    let k = read_keys_from_file(&app)?;
+    Ok(KeysPresence { has_groq: k.groq_api_key.is_some(), has_gemini: k.gemini_api_key.is_some() })
 }
 
 #[tauri::command]
 fn keys_set(app: AppHandle, keys: Keys) -> Result<(), String> {
-    let path = secrets_path(&app)?;
-    if let Some(parent) = path.parent() { fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
-    let data = serde_json::to_vec_pretty(&keys).map_err(|e| e.to_string())?;
-    fs::write(&path, data).map_err(|e| e.to_string())
+    let mut current = read_keys_from_file(&app)?;
+    if let Some(v) = keys.groq_api_key { if !v.is_empty() { current.groq_api_key = Some(v); } }
+    if let Some(v) = keys.gemini_api_key { if !v.is_empty() { current.gemini_api_key = Some(v); } }
+    write_keys_to_file(&app, &current)
 }
 
 #[tauri::command]
