@@ -118,6 +118,9 @@ export default function App() {
   const audioChunksRef = useRef<Blob[]>([])
   const [interimText, setInterimText] = useState('')
   const [finalText, setFinalText] = useState('')
+  const [formattedText, setFormattedText] = useState('')
+  const [autoFormat, setAutoFormat] = useState(true)
+  const [recordMs, setRecordMs] = useState(0)
 
   useEffect(() => {
     invoke<AppSettings>('settings_get').then((s) => {
@@ -144,28 +147,34 @@ export default function App() {
   const startRecording = async () => {
     if (pttState !== 'idle') return
     setFinalText('')
+    setFormattedText('')
     setInterimText('')
+    setRecordMs(0)
     setPttState('recording')
+    const startedAt = Date.now()
+    const timer = setInterval(() => setRecordMs(Date.now() - startedAt), 100)
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     mediaStreamRef.current = stream
     const mr = new MediaRecorder(stream)
     mediaRecorderRef.current = mr
     audioChunksRef.current = []
-    // simple fake interim update to show realtime UX; in production, wire STT streaming
-    const interimTimer = setInterval(() => {
-      setInterimText((t) => (t ? t + ' …' : '…'))
-    }, 500)
+    const interimTimer = setInterval(() => { setInterimText((t) => (t ? t + ' …' : '…')) }, 500)
     mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
     mr.onstop = async () => {
       clearInterval(interimTimer)
+      clearInterval(timer)
       setPttState('processing')
       const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
       const b64 = await blobToBase64(blob)
       const stt = await invoke<string>('stt_transcribe_once', { settings, audioB64: b64 })
       setInterimText('')
       setFinalText(stt)
-      const formatted = await invoke<string>('nlp_gemini_format', { settings, text: stt })
-      await invoke('clipboard_set', { text: formatted })
+      let out = stt
+      if (autoFormat && settings.enableGemini) {
+        out = await invoke<string>('nlp_gemini_format', { settings, text: stt })
+      }
+      setFormattedText(out)
+      await invoke('clipboard_set', { text: out })
       await invoke('input_paste')
       if (settings.autoClearClipboard) { await invoke('clipboard_clear').catch(() => {}) }
       setPttState('idle')
@@ -219,13 +228,27 @@ export default function App() {
       <div className="sections">
         <Accordion icon="📝" title="Transcript" defaultOpen>
           <div className="transcript">
-            <div className="badge">Live</div>
+            <div className="badge timer"><span className="live-dot" /> {pttState === 'recording' ? 'Recording' : 'Idle'} · {(recordMs/1000).toFixed(1)}s</div>
             <textarea className="textarea" placeholder="Interim (live)" value={interimText} readOnly />
             <textarea className="textarea" placeholder="Final" value={finalText} onChange={(e) => setFinalText(e.target.value)} />
             <div className="actions">
-              <button className="btn ghost" onClick={() => { setInterimText(''); setFinalText('') }}>Clear</button>
-              <button className="btn" onClick={async () => { await invoke('clipboard_set', { text: finalText || interimText }); }}>Copy</button>
-              <button className="btn primary" onClick={async () => { await invoke('clipboard_set', { text: finalText || interimText }); await invoke('input_paste') }}>Paste</button>
+              <button className="btn ghost" onClick={() => { setInterimText(''); setFinalText(''); setFormattedText('') }}>Clear</button>
+              <button className="btn" onClick={async () => { await invoke('clipboard_set', { text: finalText || interimText }); }}>Copy raw</button>
+              <button className="btn primary" onClick={async () => { await invoke('clipboard_set', { text: finalText || interimText }); await invoke('input_paste') }}>Paste raw</button>
+            </div>
+          </div>
+        </Accordion>
+
+        <Accordion icon="✨" title="Formatted (Gemini)">
+          <div className="transcript">
+            <div className="toggle">
+              <div className="toggle-label">Auto format after STT</div>
+              <Switch checked={autoFormat} onChange={setAutoFormat} />
+            </div>
+            <textarea className="textarea" placeholder="Formatted" value={formattedText} onChange={(e) => setFormattedText(e.target.value)} />
+            <div className="actions">
+              <button className="btn" onClick={async () => { await invoke('clipboard_set', { text: formattedText }); }}>Copy formatted</button>
+              <button className="btn primary" onClick={async () => { await invoke('clipboard_set', { text: formattedText }); await invoke('input_paste') }}>Paste formatted</button>
             </div>
           </div>
         </Accordion>
