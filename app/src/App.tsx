@@ -155,7 +155,10 @@ export default function App() {
     const timer = setInterval(() => setRecordMs(Date.now() - startedAt), 100)
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     mediaStreamRef.current = stream
-    const mr = new MediaRecorder(stream)
+    // choose mime
+    const mimeCandidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+    const mime = mimeCandidates.find((m) => (window as any).MediaRecorder?.isTypeSupported?.(m)) || ''
+    const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
     mediaRecorderRef.current = mr
     audioChunksRef.current = []
     const interimTimer = setInterval(() => { setInterimText((t) => (t ? t + ' …' : '…')) }, 500)
