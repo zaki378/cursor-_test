@@ -363,13 +363,18 @@ function KeysPanel() {
       <div>
         <label>GROQ API Key {hasGroq ? '• set' : '(not set)'}</label>
         <input type="password" value={groq} onChange={(e) => setGroq(e.target.value)} placeholder="sk_... (leave blank to keep)" />
+        <div className="actions">
+          <button className="btn" onClick={async () => { await invoke('keys_clear', { which: 'groq' }); setHasGroq(false) }}>Clear</button>
+          <button className="btn primary" onClick={save}>Update</button>
+        </div>
       </div>
       <div>
         <label>Gemini API Key {hasGemini ? '• set' : '(not set)'}</label>
         <input type="password" value={gemini} onChange={(e) => setGemini(e.target.value)} placeholder="AIza... (leave blank to keep)" />
-      </div>
-      <div style={{ display: 'flex', alignItems: 'end' }}>
-        <button className="ptt-btn" onClick={save}>Save</button>
+        <div className="actions">
+          <button className="btn" onClick={async () => { await invoke('keys_clear', { which: 'gemini' }); setHasGemini(false) }}>Clear</button>
+          <button className="btn primary" onClick={save}>Update</button>
+        </div>
       </div>
     </div>
   )

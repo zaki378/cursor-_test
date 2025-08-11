@@ -125,8 +125,23 @@ fn read_keys_from_file(app: &AppHandle) -> Result<Keys, String> {
 fn write_keys_to_file(app: &AppHandle, keys: &Keys) -> Result<(), String> {
     let path = secrets_path(app)?;
     if let Some(parent) = path.parent() { fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+    // If both keys are None or empty, remove file
+    if keys.groq_api_key.as_ref().map(|s| s.is_empty()).unwrap_or(true)
+        && keys.gemini_api_key.as_ref().map(|s| s.is_empty()).unwrap_or(true) {
+        let _ = fs::remove_file(&path);
+        return Ok(())
+    }
     let data = serde_json::to_vec_pretty(&keys).map_err(|e| e.to_string())?;
-    fs::write(&path, data).map_err(|e| e.to_string())
+    fs::write(&path, data).map_err(|e| e.to_string())?;
+    // Restrict permissions to user-only (0600) where supported
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&path).map_err(|e| e.to_string())?.permissions();
+        perms.set_mode(0o600);
+        fs::set_permissions(&path, perms).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -140,6 +155,17 @@ fn keys_set(app: AppHandle, keys: Keys) -> Result<(), String> {
     let mut current = read_keys_from_file(&app)?;
     if let Some(v) = keys.groq_api_key { if !v.is_empty() { current.groq_api_key = Some(v); } }
     if let Some(v) = keys.gemini_api_key { if !v.is_empty() { current.gemini_api_key = Some(v); } }
+    write_keys_to_file(&app, &current)
+}
+
+#[tauri::command]
+fn keys_clear(app: AppHandle, which: Option<String>) -> Result<(), String> {
+    let mut current = read_keys_from_file(&app)?;
+    match which.as_deref() {
+        Some("groq") => current.groq_api_key = None,
+        Some("gemini") => current.gemini_api_key = None,
+        _ => { current.groq_api_key = None; current.gemini_api_key = None; }
+    }
     write_keys_to_file(&app, &current)
 }
 
@@ -393,6 +419,7 @@ pub fn run() {
             mask_text,
             keys_get,
             keys_set,
+            keys_clear,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
