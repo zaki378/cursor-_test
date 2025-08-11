@@ -27,8 +27,8 @@ tauri-plugin-opener = "2"
  tauri-plugin-notification = "2"
  tauri-plugin-single-instance = "2"
 # Stronghold/keychain may not be available in all targets; keep optional
- tauri-plugin-stronghold = { version = "2", optional = true }
- tauri-plugin-keychain = { version = "2", optional = true }
+# tauri-plugin-stronghold = { version = "2", optional = true }
+# tauri-plugin-keychain = { version = "2", optional = true }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -45,9 +45,11 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "mul
  enigo = { version = "0.2", features = ["wayland"] }
 # Base64 for audio
  base64 = "0.22"
+ keyring = "2.1"
+ zeroize = "1.8"
 
 [features]
 default = []
-with-stronghold = ["tauri-plugin-stronghold"]
-with-keychain = ["tauri-plugin-keychain"]
+# with-stronghold = ["tauri-plugin-stronghold"]
+# with-keychain = ["tauri-plugin-keychain"]
 

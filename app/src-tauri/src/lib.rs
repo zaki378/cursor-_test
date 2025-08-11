@@ -3,6 +3,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf, sync::Mutex, time::Duration};
 use tauri::{AppHandle, Emitter, Manager, State};
+use zeroize::Zeroizing;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -117,57 +118,53 @@ fn secrets_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("secrets.json"))
 }
 
-fn read_keys_from_file(app: &AppHandle) -> Result<Keys, String> {
-    let path = secrets_path(app)?;
-    Ok(fs::read(&path).ok().and_then(|b| serde_json::from_slice::<Keys>(&b).ok()).unwrap_or_default())
+const KR_SERVICE: &str = "com.ptt.desktop";
+const KR_GROQ_ACCOUNT: &str = "groq_api_key";
+const KR_GEMINI_ACCOUNT: &str = "gemini_api_key";
+
+fn read_keys_from_keyring() -> Result<Keys, String> {
+    let groq = keyring::Entry::new(KR_SERVICE, KR_GROQ_ACCOUNT).and_then(|e| e.get_password()).ok();
+    let gemini = keyring::Entry::new(KR_SERVICE, KR_GEMINI_ACCOUNT).and_then(|e| e.get_password()).ok();
+    Ok(Keys { groq_api_key: groq, gemini_api_key: gemini })
 }
 
-fn write_keys_to_file(app: &AppHandle, keys: &Keys) -> Result<(), String> {
-    let path = secrets_path(app)?;
-    if let Some(parent) = path.parent() { fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
-    // If both keys are None or empty, remove file
-    if keys.groq_api_key.as_ref().map(|s| s.is_empty()).unwrap_or(true)
-        && keys.gemini_api_key.as_ref().map(|s| s.is_empty()).unwrap_or(true) {
-        let _ = fs::remove_file(&path);
-        return Ok(())
-    }
-    let data = serde_json::to_vec_pretty(&keys).map_err(|e| e.to_string())?;
-    fs::write(&path, data).map_err(|e| e.to_string())?;
-    // Restrict permissions to user-only (0600) where supported
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&path).map_err(|e| e.to_string())?.permissions();
-        perms.set_mode(0o600);
-        fs::set_permissions(&path, perms).map_err(|e| e.to_string())?;
+fn write_keys_to_keyring(keys: &Keys) -> Result<(), String> {
+    if let Some(v) = &keys.groq_api_key { keyring::Entry::new(KR_SERVICE, KR_GROQ_ACCOUNT).map_err(|e| e.to_string())?.set_password(v).map_err(|e| e.to_string())?; }
+    if let Some(v) = &keys.gemini_api_key { keyring::Entry::new(KR_SERVICE, KR_GEMINI_ACCOUNT).map_err(|e| e.to_string())?.set_password(v).map_err(|e| e.to_string())?; }
+    Ok(())
+}
+
+fn clear_keys_in_keyring(which: Option<String>) -> Result<(), String> {
+    match which.as_deref() {
+        Some("groq") => { let _ = keyring::Entry::new(KR_SERVICE, KR_GROQ_ACCOUNT).map_err(|e| e.to_string())?.delete_password(); }
+        Some("gemini") => { let _ = keyring::Entry::new(KR_SERVICE, KR_GEMINI_ACCOUNT).map_err(|e| e.to_string())?.delete_password(); }
+        _ => {
+            let _ = keyring::Entry::new(KR_SERVICE, KR_GROQ_ACCOUNT).map_err(|e| e.to_string())?.delete_password();
+            let _ = keyring::Entry::new(KR_SERVICE, KR_GEMINI_ACCOUNT).map_err(|e| e.to_string())?.delete_password();
+        }
     }
     Ok(())
 }
 
 #[tauri::command]
 fn keys_get(app: AppHandle) -> Result<KeysPresence, String> {
-    let k = read_keys_from_file(&app)?;
+    let k = read_keys_from_keyring()?;
     Ok(KeysPresence { has_groq: k.groq_api_key.is_some(), has_gemini: k.gemini_api_key.is_some() })
 }
 
 #[tauri::command]
-fn keys_set(app: AppHandle, keys: Keys) -> Result<(), String> {
-    let mut current = read_keys_from_file(&app)?;
-    if let Some(v) = keys.groq_api_key { if !v.is_empty() { current.groq_api_key = Some(v); } }
-    if let Some(v) = keys.gemini_api_key { if !v.is_empty() { current.gemini_api_key = Some(v); } }
-    write_keys_to_file(&app, &current)
+fn keys_set(_app: AppHandle, keys: Keys) -> Result<(), String> {
+    // zeroize after write
+    let groq = keys.groq_api_key.clone();
+    let gem = keys.gemini_api_key.clone();
+    write_keys_to_keyring(&keys)?;
+    if let Some(mut s) = groq.map(Zeroizing::new) { s.zeroize(); }
+    if let Some(mut s) = gem.map(Zeroizing::new) { s.zeroize(); }
+    Ok(())
 }
 
 #[tauri::command]
-fn keys_clear(app: AppHandle, which: Option<String>) -> Result<(), String> {
-    let mut current = read_keys_from_file(&app)?;
-    match which.as_deref() {
-        Some("groq") => current.groq_api_key = None,
-        Some("gemini") => current.gemini_api_key = None,
-        _ => { current.groq_api_key = None; current.gemini_api_key = None; }
-    }
-    write_keys_to_file(&app, &current)
-}
+fn keys_clear(_app: AppHandle, which: Option<String>) -> Result<(), String> { clear_keys_in_keyring(which) }
 
 #[tauri::command]
 fn settings_get(state: State<AppState>) -> Result<AppSettings, String> {
@@ -248,11 +245,7 @@ async fn input_paste(_app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 async fn stt_transcribe_once(_app: AppHandle, settings: AppSettings, audio_b64: String) -> Result<String, String> {
     if settings.offline_mode { return Ok(String::new()); }
-    let api_key = std::env::var("GROQ_API_KEY").ok()
-        .or_else(|| {
-            let path = _app.path().app_config_dir().ok()?.join("secrets.json");
-            fs::read(&path).ok().and_then(|b| serde_json::from_slice::<Keys>(&b).ok()).and_then(|k| k.groq_api_key)
-        });
+    let api_key = std::env::var("GROQ_API_KEY").ok().or_else(|| read_keys_from_keyring().ok().and_then(|k| k.groq_api_key));
     if api_key.is_none() { return Ok("(demo: STT disabled; set GROQ_API_KEY)".into()); }
     let api_key = api_key.unwrap();
     let client = reqwest::Client::builder().timeout(Duration::from_secs(60)).build().map_err(|e| e.to_string())?;
@@ -276,11 +269,7 @@ async fn stt_transcribe_once(_app: AppHandle, settings: AppSettings, audio_b64: 
 #[tauri::command]
 async fn nlp_gemini_format(_app: AppHandle, settings: AppSettings, text: String) -> Result<String, String> {
     if !settings.enable_gemini || settings.offline_mode { return Ok(text); }
-    let key = std::env::var("GEMINI_API_KEY").ok()
-        .or_else(|| {
-            let path = _app.path().app_config_dir().ok()?.join("secrets.json");
-            fs::read(&path).ok().and_then(|b| serde_json::from_slice::<Keys>(&b).ok()).and_then(|k| k.gemini_api_key)
-        });
+    let key = std::env::var("GEMINI_API_KEY").ok().or_else(|| read_keys_from_keyring().ok().and_then(|k| k.gemini_api_key));
     if key.is_none() { return Ok(text); }
     let key = key.unwrap();
     let model = "gemini-1.5-flash-latest";
