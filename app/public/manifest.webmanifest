@@ -1,0 +1,13 @@
+{
+  "name": "PTT App",
+  "short_name": "PTT",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#1e1e1e",
+  "theme_color": "#3b82f6",
+  "icons": [
+    { "src": "/cursor-_test2/icons/icon.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/cursor-_test2/src-tauri/icons/128x128.png", "sizes": "128x128", "type": "image/png" }
+  ]
+}
